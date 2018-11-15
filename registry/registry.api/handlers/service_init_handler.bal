@@ -1,9 +1,24 @@
+// Copyright (c) 2018, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+//
+// WSO2 Inc. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
 import ballerina/internal as file;
 import ballerina/system;
 import ballerina/config;
 import ballerina/log;
 
-@final string FILE_SEPARATOR = "/";
 @final string REGISTRY_ROOT_DIRECTORY_PATH = createRegistryRootDirectory();
 @final string ARCHIVES_DIRECTORY_PATH = string `{{REGISTRY_ROOT_DIRECTORY_PATH}}{{FILE_SEPARATOR}}archives`;
 @final string REPOSITORY_DIRECTORY_PATH = string `{{REGISTRY_ROOT_DIRECTORY_PATH}}{{FILE_SEPARATOR}}repository`;
@@ -90,8 +105,7 @@ function initializeFileStorage() returns (boolean|RegistryError) {
 # Creates or identify existing registry root location.
 # + return - Location of the repository.
 function createRegistryRootDirectory() returns (string) {
-    file:Path rootDir = new (config:getAsString("REGISTRY_REPOSITORY_ROOT_LOCATION",
-            default = system:getUserHome() + FILE_SEPARATOR + "cellery-registry"));
+    file:Path rootDir = new (REGISTRY_ROOT_DIRECTORY);
     try {
         if (!rootDir.exists()) {
             log:printDebug(string `Creating Registry root directory: {{rootDir.getPathValue()}}`);
