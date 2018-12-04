@@ -26,34 +26,35 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
-func newApisCommand() *cobra.Command {
+func newComponentsCommand() *cobra.Command {
 	var cellName string
 	cmd := &cobra.Command{
-		Use:   "apis [OPTIONS]",
-		Short: "list the exposed APIs of a cell instance",
+		Use:   "components [OPTIONS]",
+		Short: "Lists the components which the cell encapsulates.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if (len(args) == 0) {
 				cmd.Help()
 				return nil
 			}
 			cellName = args[0]
-			err := apis(cellName)
+			err := components(cellName)
 			if err != nil{
 				cmd.Help()
 				return err
 			}
 			return nil
 		},
-		Example: "  cellery apis my-project:v1.0 -n myproject-v1.0.0",
+		Example: "  cellery components my-project:v1.0 -n myproject-v1.0.0",
 	}
 	return cmd
 }
 
-func apis(cellName string) error {
-	cmd := exec.Command("kubectl", "get", "gateways", cellName + "--gateway", "-o", "json")
+func components(cellName string) error {
+	cmd := exec.Command("kubectl", "get", "services", "-l", GroupName + "/cell=" + cellName, "-o", "json")
 	stdoutReader, _ := cmd.StdoutPipe()
 	stdoutScanner := bufio.NewScanner(stdoutReader)
 	output := ""
@@ -62,10 +63,8 @@ func apis(cellName string) error {
 			output = output + stdoutScanner.Text()
 		}
 	}()
-
 	stderrReader, _ := cmd.StderrPipe()
 	stderrScanner := bufio.NewScanner(stderrReader)
-
 	go func() {
 		for stderrScanner.Scan() {
 			fmt.Println(stderrScanner.Text())
@@ -73,41 +72,44 @@ func apis(cellName string) error {
 	}()
 	err := cmd.Start()
 	if err != nil {
-		fmt.Printf("Error in executing cellery apis: %v \n", err)
+		fmt.Printf("Error in executing cell components: %v \n", err)
 		os.Exit(1)
 	}
 	err = cmd.Wait()
 	if err != nil {
-		fmt.Printf("\x1b[31;1m Cellery apis finished with error: \x1b[0m %v \n", err)
+		fmt.Printf("\x1b[31;1m Cell components finished with error: \x1b[0m %v \n", err)
 		os.Exit(1)
 	}
 
-	jsonOutput := &Gateway{}
+	jsonOutput := &Service{}
 
 	errJson := json.Unmarshal([]byte(output), jsonOutput)
 	if errJson!= nil{
 		fmt.Println(errJson)
 	}
 
-	displayApisTable(jsonOutput.GatewaySpec.Apis)
+	displayComponentsTable(jsonOutput.Items, cellName)
 	return nil
 }
 
-func displayApisTable(apiArray []GatewayApi) error {
+func displayComponentsTable(componentArray []ServiceItem, cellName string) error {
 	tableData := [][]string{}
 
-	for i := 0; i < len(apiArray); i++ {
-		api := []string{strings.Split(apiArray[i].Backend, "/")[2], apiArray[i].Context}
-		paths := getApiMethodsArray(apiArray[i].Definitions)
+	for i := 0; i < len(componentArray); i++ {
+		var name string
+		name = strings.Replace(componentArray[i].Metadata.Name, cellName + "--", "", -1)
+		name = strings.Replace(name, "-service", "", -1)
 
-		for i := 0; i < len(paths) ; i++  {
-			api = append(api, paths[i])
+		ports := strconv.Itoa(componentArray[i].Spec.Ports[0].Port)
+		for j := 1; j < len(componentArray[i].Spec.Ports); j++ {
+			ports = ports + "/" + strconv.Itoa(componentArray[i].Spec.Ports[j].Port)
 		}
-		tableData = append(tableData, api)
+		component := []string{name, ports}
+		tableData = append(tableData, component)
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"HOST NAME", "CONTEXT", "GET", "POST", "PATCH", "PUT", "DELETE"})
+	table.SetHeader([]string{"NAME", "PORTS"})
 	table.SetBorders(tablewriter.Border{Left: false, Top: false, Right: false, Bottom: false})
 	table.SetAlignment(3)
 	table.SetRowSeparator("-")
@@ -115,47 +117,13 @@ func displayApisTable(apiArray []GatewayApi) error {
 	table.SetColumnSeparator(" ")
 	table.SetHeaderColor(
 		tablewriter.Colors{tablewriter.Bold},
-		tablewriter.Colors{tablewriter.Bold},
-		tablewriter.Colors{tablewriter.Bold},
-		tablewriter.Colors{tablewriter.Bold},
-		tablewriter.Colors{tablewriter.Bold},
-		tablewriter.Colors{tablewriter.Bold},
 		tablewriter.Colors{tablewriter.Bold})
 	table.SetColumnColor(
-		tablewriter.Colors{},
 		tablewriter.Colors{tablewriter.FgHiBlueColor},
-		tablewriter.Colors{},
-		tablewriter.Colors{},
-		tablewriter.Colors{},
-		tablewriter.Colors{},
 		tablewriter.Colors{})
 
 	table.AppendBulk(tableData)
 	table.Render()
 
 	return nil
-}
-
-func getApiMethodsArray(definitions []GatewayDefinition) []string {
-	methodArray := make([]string, 5)
-
-	for i := 0; i < len(definitions) ; i++ {
-		if strings.EqualFold(definitions[i].Method, "GET") {
-			methodArray[0] = definitions[i].Path
-		}
-		if strings.EqualFold(definitions[i].Method, "POST")  {
-			methodArray[1] = definitions[i].Path
-		}
-		if strings.EqualFold(definitions[i].Method, "PATCH")  {
-			methodArray[2] = definitions[i].Path
-		}
-		if strings.EqualFold(definitions[i].Method, "PUT")  {
-			methodArray[3] = definitions[i].Path
-		}
-		if strings.EqualFold(definitions[i].Method, "DELETE")  {
-			methodArray[4] = definitions[i].Path
-		}
-	}
-
-	return methodArray
 }
