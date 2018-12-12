@@ -38,18 +38,18 @@ public type Definition record{
 };
 
 public type API record{
-    string name;
+    string name?;
     string parent;
     string|Ingress context;
     boolean global;
-    Ingress|Definition[]? definitions;
+    Ingress|Definition[] definitions?;
     !...
 };
 
 public type Egress record{
     string parent;
     Ingress ingress;
-    string envVar;
+    string envVar?;
     Resiliency policy?;
     !...
 };
@@ -71,9 +71,9 @@ public type Component record{
     string name;
     ImageSource source;
     int replicas;
-    map env;
+    map<string> env;
     Ingress[] ingresses;
-    Egress[] egresses;
+    Egress[] egresses?;
     !...
 };
 
@@ -86,13 +86,18 @@ public type Ingress record{
 };
 
 public type Cell object {
-    public string name;
-    public Component[] components;
-    public API[] apis;
-    public Egress[] egresses;
+    public string name = "";
+    public Component[] components = [];
+    public API?[] apis = [];
+    public Egress?[] egresses = [];
 
     public function addComponent(Component component) {
-        components[lengthof components] = component;
+        int size = self.components.length();
+        self.components[size] = component;
+    }
+
+    public function __init(string name) {
+        self.name = name;
     }
 };
 
@@ -100,4 +105,4 @@ public type Cell object {
 #
 # + cell - The cell
 # + return - true/false
-public extern function build(Cell cell) returns (boolean|error);
+public extern function build(Cell cell) returns (string);

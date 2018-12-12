@@ -35,8 +35,9 @@ import org.ballerinalang.bre.bvm.BlockingNativeCallableUnit;
 import org.ballerinalang.model.types.TypeKind;
 import org.ballerinalang.model.values.BMap;
 import org.ballerinalang.model.values.BRefType;
-import org.ballerinalang.model.values.BRefValueArray;
+import org.ballerinalang.model.values.BString;
 import org.ballerinalang.model.values.BValue;
+import org.ballerinalang.model.values.BValueArray;
 import org.ballerinalang.natives.annotations.Argument;
 import org.ballerinalang.natives.annotations.BallerinaFunction;
 import org.ballerinalang.natives.annotations.ReturnType;
@@ -70,9 +71,10 @@ public class CelleryBuild extends BlockingNativeCallableUnit {
 
     public void execute(Context ctx) {
         processComponents(
-                ((BRefValueArray) ((BMap) ctx.getNullableRefArgument(0)).getMap().get("components")).getValues());
-        processAPIs(((BRefValueArray) ((BMap) ctx.getNullableRefArgument(0)).getMap().get("apis")).getValues());
-        generateCell(((BMap) ctx.getNullableRefArgument(0)).getMap().get("name").toString());
+                ((BValueArray) ((BMap) ctx.getNullableRefArgument(0)).getMap().get("components")).getValues());
+        processAPIs(((BValueArray) ((BMap) ctx.getNullableRefArgument(0)).getMap().get("apis")).getValues());
+        String cellYaml = generateCell(((BMap) ctx.getNullableRefArgument(0)).getMap().get("name").toString());
+        ctx.setReturnValues(new BString(cellYaml));
     }
 
     private void processComponents(BRefType<?>[] components) {
@@ -95,7 +97,7 @@ public class CelleryBuild extends BlockingNativeCallableUnit {
                                 singletonList(((BMap) value).getMap()).get(0).values().toArray()[0].toString());
                         break;
                     case "ingresses":
-                        String portString = processIngressPort(((BRefValueArray) value).getValues());
+                        String portString = processIngressPort(((BValueArray) value).getValues());
                         component.setServicePort(Integer.parseInt(portString.substring(portString.indexOf(":") + 1)));
                         component.setContainerPort(Integer.parseInt(portString.substring(0, portString.indexOf(":"))));
                         break;
@@ -162,7 +164,7 @@ public class CelleryBuild extends BlockingNativeCallableUnit {
                                     api.setContext(contextValue.toString());
                                     break;
                                 case "definitions":
-                                    api.setDefinitions(processDefinitions(((BRefValueArray) contextValue).getValues()));
+                                    api.setDefinitions(processDefinitions(((BValueArray) contextValue).getValues()));
                                     break;
                                 default:
                                     break;
@@ -217,7 +219,7 @@ public class CelleryBuild extends BlockingNativeCallableUnit {
         return name.toLowerCase(Locale.getDefault()).replace("_", "-").replace(".", "-");
     }
 
-    private void generateCell(String name) {
+    private String generateCell(String name) {
         List<Component> components =
                 new ArrayList<>(ComponentHolder.getInstance().getComponentNameToComponentMap().values());
         GatewaySpec spec = new GatewaySpec();
@@ -245,11 +247,13 @@ public class CelleryBuild extends BlockingNativeCallableUnit {
         cell.setMetadata(new ObjectMetaBuilder().withName(name).build());
         cell.setSpec(cellSpec);
         String targetPath = System.getProperty("user.dir") + File.separator + name + ".yaml";
+        String yamlContent = toYaml(cell);
         try {
-            writeToFile(toYaml(cell), targetPath);
+            writeToFile(yamlContent, targetPath);
         } catch (IOException e) {
-            throw new BallerinaException(e.getMessage());
+            throw new BallerinaException(e.getMessage() + " " + targetPath);
         }
+        return yamlContent;
     }
 
     /**
