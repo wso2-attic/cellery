@@ -4,16 +4,6 @@ Cellery is an architectural description language, runtime (tooling and extension
 
 ## Developer Guide
 
-#### Cellery API Server
-
-This is the RESTful API server for Cellery. This will be used by the CLI as well as any other client (UI, etc) which will interact with Cellery.
-
-Start the API server using following command
-
-```
-$ ballerina run api-serser/api.bal
-```
-
 #### Cellery CLI
 
 This is the Cellery CLI which can be used to interact with Cellery API Server to design, develop, build, run and manage your cells.
