@@ -21,7 +21,7 @@ cellery:Component helloWorldComp = {
     ]
 };
 
-cellery:Cell helloCell = new("Hello-World");
+cellery:CellImage helloCell = new("Hello-World");
 
 public function celleryBuild() {
     helloCell.addComponent(helloWorldComp);
@@ -34,7 +34,7 @@ public function celleryBuild() {
         }
     ];
 
-    var out = cellery:build(helloCell);
+    var out = cellery:createImage(helloCell);
     if(out is boolean) {
         io:println("Hello Cell Built successfully.");
     }

@@ -79,8 +79,8 @@ cellery:Component componentB = {
 };
 
 //Cell
-cellery:Cell cellA = new ("CellA");
-cellery:Cell cellB = new ("CellB");
+cellery:CellImage cellA = new ("CellA");
+cellery:CellImage cellB = new ("CellB");
 
 //Build Function
 public function celleryBuild() {
@@ -107,7 +107,7 @@ public function celleryBuild() {
         }
     ];
 
-    _ = cellery:build(cellA);
+    _ = cellery:createImage(cellA);
 }
 ```
 
