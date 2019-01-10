@@ -88,13 +88,24 @@ public type Component record{
 public type CellStub object {
     public string name;
     map<Ingress> ingresses = {};
+    map<string> context = {};
+
     public function __init(string name) {
         self.name = name;
+        self.ingresses = {};
+        self.context = {};
+    }
+
+    public function addIngress(string context) {
+        self.context = { name: context };
+    }
+
+    public function getIngress(string ingressName) returns string? {
+        return self.context[ingressName];
     }
 };
 
 public type Ingress record{
-    string name;
     string port;
     string context?;
     Definition[] definitions?;
@@ -139,7 +150,7 @@ public type CellImage object {
         }
     }
 
-    public function declareEgress(string cellName, string envVarName) {
+    public function declareEgress(string cellName, string? context, string envVarName) {
         self.egresses[self.egresses.length()] = {
             targetCell: cellName,
             envVar: envVarName
