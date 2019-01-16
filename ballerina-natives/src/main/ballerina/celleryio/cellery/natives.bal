@@ -13,6 +13,7 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
+import ballerina/log;
 
 public type DockerSource record{
     string Dockerfile;
@@ -40,16 +41,15 @@ public type Definition record{
 public type API record{
     string name?;
     string targetComponent;
-    string|Ingress? context;
     boolean global;
-    Ingress|Definition[] definitions?;
+    TCP|HTTP ingress;
     !...
 };
 
 public type Egress record{
     string targetComponent?;
     string targetCell?;
-    Ingress ingress?;
+    TCP|HTTP ingress?;
     string envVar?;
     Resiliency resiliency?;
     !...
@@ -79,15 +79,64 @@ public type Component record{
     ImageSource source;
     int replicas = 1;
     map<string> env?;
-    map<Ingress> ingresses?;
+    map<TCP|HTTP> ingresses;
     Egress[] egresses?;
     boolean isStub = false;
+    map<Env|Secret> parameters?;
     !...
+};
+
+public type TCP record{
+    int port;
+    string host;
+    !...
+};
+
+public type HTTP record{
+    int port;
+    string context;
+    Definition[] definitions;
+    !...
+};
+
+public type Env object {
+    public string|int|boolean|float? value;
+
+    public function __init(string|int|boolean|float? default = ()) {
+        self.value = default;
+    }
+
+    //public function __init() {
+    //    self.value = "";
+    //}
+
+    public function setValue(string|int|boolean|float value) {
+        self.value = value;
+    }
+};
+
+public type Secret object {
+    public string path;
+    public string|int|boolean|float value;
+
+    public function __init(string path, string|int|boolean|float value) {
+        self.path = path;
+        self.value = value;
+    }
+
+    public function __init() {
+        self.path = "";
+        self.value = "";
+    }
+
+    public function setValue(string|int|boolean|float value) {
+        self.value = value;
+    }
 };
 
 public type CellStub object {
     public string name;
-    map<Ingress> ingresses = {};
+    map<TCP|HTTP> ingresses = {};
     map<string> context = {};
 
     public function __init(string name) {
@@ -105,13 +154,6 @@ public type CellStub object {
     }
 };
 
-public type Ingress record{
-    string port;
-    string context?;
-    Definition[] definitions?;
-    !...
-};
-
 public type CellImage object {
     public string name;
     public Component[] components = [];
@@ -123,50 +165,37 @@ public type CellImage object {
     }
 
     public function exposeAPIsFrom(Component component) {
-        foreach var (name, ingress) in component.ingresses {
+        foreach var (name, ingressTemp) in component.ingresses {
             self.apis[self.apis.length()] = {
                 targetComponent: component.name,
-                context: ingress,
+                ingress: ingressTemp,
                 global: false
             };
         }
     }
 
     public function exposeAPIFrom(Component component, string ingressName) {
-        self.apis[self.apis.length()] = {
-            targetComponent: component.name,
-            context: component.ingresses[ingressName],
-            global: false
-        };
-    }
-
-    public function exposeGlobalAPI(Component component) {
-        foreach var (name, ingress) in component.ingresses {
+        TCP|HTTP? ingress = component.ingresses[ingressName];
+        if (ingress is (TCP|HTTP)) {
             self.apis[self.apis.length()] = {
                 targetComponent: component.name,
-                context: ingress,
-                global: true
+                ingress: ingress,
+                global: false
             };
+        } else {
+            error err = error("Ingress " + ingressName + " not found in the component " + component.name + ".");
+            panic err;
         }
     }
 
-    public function declareEgress(string cellName, string? context, string envVarName) {
-        self.egresses[self.egresses.length()] = {
-            targetCell: cellName,
-            envVar: envVarName
-        };
-    }
-
-    public function addStub(CellStub stub) {
-        Component temp = {
-            name: stub.name,
-            source: {
-                image: ""
-            },
-            ingresses: stub.ingresses,
-            isStub: true
-        };
-        self.addComponent(temp);
+    public function exposeGlobalAPI(Component component) {
+        foreach var (name, ingressTemp) in component.ingresses {
+            self.apis[self.apis.length()] = {
+                targetComponent: component.name,
+                ingress: ingressTemp,
+                global: true
+            };
+        }
     }
 
     public function __init(string name) {
@@ -179,3 +208,30 @@ public type CellImage object {
 # + cellImage - The cell image definition
 # + return - true/false
 public extern function createImage(CellImage cellImage) returns (boolean|error);
+
+public function getHost(CellImage cellImage, Component component) returns (string) {
+    return getValidName(cellImage.name) + "--" + getValidName(component.name) + "-service";
+}
+
+public function getContext(TCP|HTTP? httpIngress) returns (string) {
+    if (httpIngress is HTTP) {
+        return httpIngress.context;
+    }
+    error err = error("Unable to extract context from ingress");
+    panic err;
+}
+
+function getValidName(string name) returns string {
+    return name.toLower().replace("_", "-").replace(".", "-");
+}
+
+public function setParameter(Env|Secret? param, string|int|boolean|float value) {
+    if (param is (Env)) {
+        param.value = value;
+    } else if (param is Secret) {
+        param.value = value;
+    } else {
+        error err = error("Parameter not declared in the component.");
+        panic err;
+    }
+}

@@ -1,15 +1,16 @@
 import ballerina/io;
+import ballerina/config;
 import celleryio/cellery;
 
 //Employee Component
-cellery:Component employee = {
+cellery:Component employeeComponent = {
     name: "employee",
     source: {
         image: "docker.io/wso2vick/sampleapp-employee"
     },
     ingresses: {
         employee: {
-            port: "8080:80",
+            port: 8080,
             context: "employee",
             definitions: [
                 {
@@ -18,31 +19,52 @@ cellery:Component employee = {
                 }
             ]
         }
+    },
+    parameters: {
+        SALARY: new cellery:Env(),
+        PORT: new cellery:Env(default = 8080),
+        CONTEXT: new cellery:Env()
     }
 };
 
 //Salary Component
-cellery:Component salary = {
+cellery:Component salaryComponent = {
     name: "salary",
     source: {
         image: "docker.io/wso2vick/sampleapp-salary"
     },
     ingresses: {
         salaryAPI: {
-            port: "8080:80"
+            context: "payroll",
+            port: 8080,
+            definitions: [
+                {
+                    path: "/salary",
+                    method: "GET"
+                }
+            ]
         }
     }
 };
 
 public cellery:CellImage employeeCell = new("Employee");
 
-public function celleryBuild() {
+public function build() {
 
     // Build EmployeeCell
     io:println("Building Employee Cell ...");
-    employeeCell.addComponent(employee);
-    employeeCell.addComponent(salary);
+
+    // Map component parameters
+    cellery:setParameter(employeeComponent.parameters["SALARY"], cellery:getHost(employeeCell, salaryComponent));
+    cellery:setParameter(employeeComponent.parameters["CONTEXT"],
+        cellery:getContext(salaryComponent.ingresses["salaryAPI"]));
+
+    // Add components to Cell
+    employeeCell.addComponent(employeeComponent);
+    employeeCell.addComponent(salaryComponent);
+
     //Expose API from Cell Gateway
-    employeeCell.exposeAPIsFrom(employee);
+    employeeCell.exposeAPIsFrom(employeeComponent);
+
     _ = cellery:createImage(employeeCell);
 }
