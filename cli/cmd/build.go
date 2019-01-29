@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/tj/go-spin"
 	"github.com/wso2/cellery/cli/constants"
 	"github.com/wso2/cellery/cli/util"
@@ -41,12 +40,11 @@ var fileName string
 
 func newBuildCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "build CELL_FILE_NAME",
+		Use:   "build [OPTIONS]",
 		Short: "Build an immutable cell image with required dependencies",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				fmt.Printf("'cellery build' requires exactly 1 argument.\n" +
-					"See 'cellery build --help' for more infomation.\n")
+				cmd.Help()
 				return nil
 			}
 			fileName = args[0]
@@ -57,7 +55,7 @@ func newBuildCommand() *cobra.Command {
 			}
 			return nil
 		},
-		Example: "  cellery build my-project.bal\n  cellery build my-project.bal -t myproject:1.0.0",
+		Example: "  cellery build my-project.bal -t org/myproject:1.0.0",
 	}
 	cmd.Flags().StringVarP(&tag, "tag", "t", "", "Name and optionally a tag in the 'name:tag' format")
 	return cmd
@@ -77,33 +75,18 @@ func buildSpinner(tag string) {
 }
 
 func runBuild(tag string, fileName string) error {
-
-	fileExist, err := util.FileExists(fileName)
-	if !fileExist {
-		fmt.Printf("Please check the filename. File '%s' does not exist.\n", fileName)
-		os.Exit(1)
-	}
-
-	var extension = filepath.Ext(fileName)
-	var fileNameSuffix = fileName[0 : len(fileName)-len(extension)]
-
-	viper.SetConfigName("Cellery") // name of config file (without extension)
-	viper.SetConfigType("toml")
-	viper.AddConfigPath(".")        // optionally look for config in the working directory
-	confErr := viper.ReadInConfig() // Find and read the config file
-
-	if confErr != nil { // Handle errors reading the config file
-		fmt.Printf("Error while readng toml file: %s\n", confErr)
-		os.Exit(1)
+	if fileName == "" {
+		return fmt.Errorf("no file name specified")
 	}
 
 	registryHost := constants.CENTRAL_REGISTRY_HOST
-	organization := viper.GetString("project.organization")
-	imageName := fileNameSuffix
-	imageVersion := viper.GetString("project.version")
+	var organization string
+	var imageName string
+	var imageVersion string
 
 	if tag == "" {
-		tag = organization + "/" + fileNameSuffix + ":" + imageVersion
+		fmt.Printf("Tag name cannot be empty.\n")
+		os.Exit(1)
 	} else {
 		strArr := strings.Split(tag, "/")
 		if len(strArr) == 3 {
@@ -178,9 +161,8 @@ func runBuild(tag string, fileName string) error {
 		os.Exit(1)
 	}
 	folders := []string{"artifacts"}
-	files := []string{fileName, constants.CONFIG_FILE}
 	output := imageName + ".zip"
-	err = util.RecursiveZip(files, folders, output)
+	err = util.RecursiveZip(nil, folders, output)
 	if err != nil {
 		fmt.Printf("\x1b[31;1mCell build finished with error: \x1b[0m %v \n", err)
 		os.Exit(1)
@@ -205,6 +187,10 @@ func runBuild(tag string, fileName string) error {
 	_ = os.Remove(zipSrc)
 
 	fmt.Printf(util.GreenBold("\U00002714")+" Successfully built cell image: %s\n", util.Bold(tag))
-	util.PrintWhatsNextMessage("cellery run " + tag)
+	fmt.Println()
+	fmt.Println(util.Bold("Whats next ?"))
+	fmt.Println("======================")
+	fmt.Println("Execute the following command to run the project: ")
+	fmt.Println("  $ cellery run " + tag)
 	return nil
 }
